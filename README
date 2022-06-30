@@ -6,6 +6,19 @@ My personal fork with the following patches:
 - Read SSA and ASS subtitles
 
 ==================
+How to compile:
+
+```
+$ ./autogen.sh
+$ ./configure
+$ make -j
+$ sudo make install
+$ sudo checkinstall
+$ sudo /usr/local/sbin/minidlnad -R -f /etc/minidlna.conf
+```
+
+
+==================
 MiniDLNA project
 (c) 2009 Justin Maggard
 Portions (c) 2006-2007 Thomas Bernard

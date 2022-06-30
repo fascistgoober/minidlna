@@ -8,11 +8,13 @@ My personal fork with the following patches:
 ==================
 How to compile:
 
-`$ ./autogen.sh
+```
+$ ./autogen.sh
 $ ./configure
 $ make -j
 $ sudo make install
-$ sudo /usr/local/sbin/minidlnad -R -f /etc/minidlna.conf`
+$ sudo /usr/local/sbin/minidlnad -R -f /etc/minidlna.conf
+```
 
 ==================
 MiniDLNA project

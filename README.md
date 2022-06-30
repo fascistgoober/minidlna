@@ -1,3 +1,9 @@
+I lifted some guy's code and had to fix two or three things.
+So, this is my fork of it.
+
+
+----------
+
 My personal fork with the following patches:
 - Cygwin port
 - No cover resize option
@@ -6,6 +12,7 @@ My personal fork with the following patches:
 - Read SSA and ASS subtitles
 
 ==================
+
 How to compile:
 
 ```
@@ -17,6 +24,7 @@ $ sudo /usr/local/sbin/minidlnad -R -f /etc/minidlna.conf
 ```
 
 ==================
+
 MiniDLNA project
 (c) 2009 Justin Maggard
 Portions (c) 2006-2007 Thomas Bernard

@@ -43,9 +43,10 @@
 #endif
 
 #include "config.h"
+#include "event.h"
 #if HAVE_GETIFADDRS
 # include <ifaddrs.h>
-# if defined(__linux__) || defined(__CYGWIN__)
+# ifdef __linux__
 #  ifndef AF_LINK
 #   define AF_LINK AF_INET
 #  endif
@@ -88,10 +89,6 @@ getifaddr(const char *ifname)
 		addr_in = (struct sockaddr_in *)p->ifa_addr;
 		if (!ifname && (p->ifa_flags & (IFF_LOOPBACK | IFF_SLAVE)))
 			continue;
-#ifdef __CYGWIN__
-		if (!ifname && !(p->ifa_flags & IFF_RUNNING))
-			continue;
-#endif  // __CYGWIN__
 		memcpy(&lan_addr[n_lan_addr].addr, &addr_in->sin_addr, sizeof(lan_addr[n_lan_addr].addr));
 		if (!inet_ntop(AF_INET, &addr_in->sin_addr, lan_addr[n_lan_addr].str, sizeof(lan_addr[0].str)) )
 		{
@@ -177,7 +174,7 @@ getsyshwaddr(char *buf, int len)
 {
 	unsigned char mac[6];
 	int ret = -1;
-#if defined(HAVE_GETIFADDRS) && !defined (__linux__) && !defined (__sun__) && !defined(__CYGWIN__)
+#if defined(HAVE_GETIFADDRS) && !defined (__linux__) && !defined (__sun__)
 	struct ifaddrs *ifap, *p;
 	struct sockaddr_in *addr_in;
 	uint8_t a;
@@ -208,9 +205,13 @@ getsyshwaddr(char *buf, int len)
 				continue;
 			memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
 #else
+			if (p->ifa_addr->sa_family != AF_LINK)
+				continue;
 			struct sockaddr_dl *sdl;
 			sdl = (struct sockaddr_dl*)p->ifa_addr;
-			memcpy(mac, LLADDR(sdl), sdl->sdl_alen);
+			if (sdl->sdl_alen != 6)
+				continue;
+			memcpy(mac, LLADDR(sdl), 6);
 #endif
 			if (MACADDR_IS_ZERO(mac))
 				continue;
@@ -273,6 +274,41 @@ getsyshwaddr(char *buf, int len)
 	return ret;
 }
 
+int
+get_remote_mac(struct in_addr ip_addr, unsigned char *mac)
+{
+	struct in_addr arp_ent;
+	FILE * arp;
+	char remote_ip[16];
+	int matches, hwtype, flags;
+	memset(mac, 0xFF, 6);
+
+	arp = fopen("/proc/net/arp", "r");
+	if (!arp)
+		return 1;
+	while (!feof(arp))
+	{
+		matches = fscanf(arp, "%15s 0x%8X 0x%8X %2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+		                      remote_ip, &hwtype, &flags,
+		                      &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+		if (matches != 9)
+			continue;
+		inet_pton(AF_INET, remote_ip, &arp_ent);
+		if (ip_addr.s_addr == arp_ent.s_addr)
+			break;
+		mac[0] = 0xFF;
+	}
+	fclose(arp);
+
+	if (mac[0] == 0xFF)
+	{
+		memset(mac, 0xFF, 6);
+		return 1;
+	}
+
+	return 0;
+}
+
 void
 reload_ifaces(int force_notify)
 {
@@ -312,97 +348,6 @@ reload_ifaces(int force_notify)
 	}
 }
 
-#if defined(__CYGWIN__) && !defined(__x86_64)
-#include <windows.h>
-//#include <winsock2.h>
-
-/* copied from winsock2.h */
-/* can not #include <winsock2.h> */
-/* because there are many defines which conflict with socket functions */
-/* just use WSACreateEvent(), WSAGetLastError(), WSAResetEvent() */
-#define WSA_IO_PENDING (ERROR_IO_PENDING)
-#ifndef WINSOCK_API_LINKAGE
-#ifdef  DECLSPEC_IMPORT
-#define WINSOCK_API_LINKAGE	DECLSPEC_IMPORT
-#else
-#define WINSOCK_API_LINKAGE
-#endif
-#endif /* WINSOCK_API_LINKAGE */
-#define WSAAPI	WINAPI
-#define WSAEVENT HANDLE
-WINSOCK_API_LINKAGE WSAEVENT WSAAPI WSACreateEvent(void);
-WINSOCK_API_LINKAGE int WSAAPI WSAGetLastError(void);
-WINSOCK_API_LINKAGE WINBOOL WSAAPI WSAResetEvent(WSAEVENT hEvent);
-
-static OVERLAPPED overlap;
-static HANDLE hand;
-#endif // __CYGWIN__
-
-#ifdef __CYGWIN__
-#include <iphlpapi.h>
-#endif // __CYGWIN__
-
-int
-get_remote_mac(struct in_addr ip_addr, unsigned char *mac)
-{
-#ifndef __CYGWIN__
-	struct in_addr arp_ent;
-	FILE * arp;
-	char remote_ip[16];
-	int matches, hwtype, flags;
-#else
-	PMIB_IPNETTABLE arp;
-	DWORD ret, size;
-#endif
-	memset(mac, 0xFF, 6);
-#ifndef __CYGWIN__
-	arp = fopen("/proc/net/arp", "r");
-	if (!arp)
-		return 1;
-	while (!feof(arp))
-	{
-		matches = fscanf(arp, "%15s 0x%8X 0x%8X %2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
-		                      remote_ip, &hwtype, &flags,
-		                      &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
-		if (matches != 9)
-			continue;
-		inet_pton(AF_INET, remote_ip, &arp_ent);
-		if (ip_addr.s_addr == arp_ent.s_addr)
-			break;
-		mac[0] = 0xFF;
-	}
-	fclose(arp);
-#else
-	// query for buffer size needed
-	size = 0;
-	arp = NULL;
-	ret = GetIpNetTable(arp, &size, FALSE);
-	if (ret == ERROR_INSUFFICIENT_BUFFER) {
-     // need more space
-     arp = (PMIB_IPNETTABLE) malloc(size);
-     ret = GetIpNetTable(arp, &size, FALSE);
-		 if (ret == NO_ERROR && arp != NULL) {
-			 	for (int i = 0; i < arp->dwNumEntries; ++i) {
-					if (arp->table[i].dwPhysAddrLen == 6 &&
-							arp->table[i].dwAddr == ip_addr.s_addr) {
-						memcpy(mac, arp->table[i].bPhysAddr, 6);
-						break;
-					}
-				}
-		 }
-	}
-	free(arp);
-#endif
-
-	if (mac[0] == 0xFF)
-	{
-		memset(mac, 0xFF, 6);
-		return 1;
-	}
-
-	return 0;
-}
-
 int
 OpenAndConfMonitorSocket(void)
 {
@@ -431,28 +376,16 @@ OpenAndConfMonitorSocket(void)
 	}
 
 	return s;
-#elif defined(__CYGWIN__) && !defined(__x86_64)
-	hand = WSACreateEvent();
-	overlap.hEvent = WSACreateEvent();
-
-	if (NotifyAddrChange(&hand, &overlap) != NO_ERROR)
-	{
-		if (WSAGetLastError() != WSA_IO_PENDING)
-		{
-			printf("NotifyAddrChange error...%d\n", WSAGetLastError());
-			return -1;
-		}
-	}
-	return -2;
 #else
 	return -1;
 #endif
 }
 
 void
-ProcessMonitorEvent(int s)
+ProcessMonitorEvent(struct event *ev)
 {
 #ifdef HAVE_NETLINK
+	int s = ev->fd;
 	int len;
 	char buf[4096];
 	struct nlmsghdr *nlh;
@@ -474,12 +407,5 @@ ProcessMonitorEvent(int s)
 	}
 	if (changed)
 		reload_ifaces(0);
-#elif defined(__CYGWIN__) && !defined(__x86_64)
-	if (WaitForSingleObject(overlap.hEvent, 0) == WAIT_OBJECT_0)
-	{
-		WSAResetEvent(overlap.hEvent);
-		NotifyAddrChange(&hand, &overlap);
-		reload_ifaces(0);
-	}
 #endif
 }

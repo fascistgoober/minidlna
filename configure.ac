@@ -29,6 +29,7 @@ m4_ifdef([AC_USE_SYSTEM_EXTENSIONS], [AC_USE_SYSTEM_EXTENSIONS])
 AM_ICONV
 AM_GNU_GETTEXT([external])
 AM_GNU_GETTEXT_VERSION(0.18)
+AM_GNU_GETTEXT_REQUIRE_VERSION(0.18)
 
 # Checks for programs.
 AC_PROG_AWK
@@ -68,6 +69,8 @@ AC_C_BIGENDIAN
 AC_FUNC_FORK
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_CHECK_FUNCS([gethostname getifaddrs gettimeofday inet_ntoa memmove memset mkdir realpath select sendfile setlocale socket strcasecmp strchr strdup strerror strncasecmp strpbrk strrchr strstr strtol strtoul])
+AC_CHECK_DECLS([SEEK_HOLE])
+AC_SEARCH_LIBS([clock_gettime], [rt], [AC_DEFINE([HAVE_CLOCK_GETTIME], [1], [use clock_gettime])],)
 
 #
 # Check for struct ip_mreqn
@@ -143,7 +146,6 @@ AC_COMPILE_IFELSE(
     ],
     [
         AC_MSG_RESULT([no])
-        AC_SEARCH_LIBS([clock_gettime], [rt], [AC_DEFINE([HAVE_CLOCK_GETTIME], [1], [use clock_gettime])],)
     ])
 
 AC_CHECK_HEADER(linux/netlink.h,
@@ -383,12 +385,6 @@ AC_COMPILE_IFELSE(
      ])
 CFLAGS="$CFLAGS_SAVE"
 
-if test -n "$CYGWIN_OS"; then
-    AC_CHECK_LIB([z], [gzopen], [], [])
-    AC_CHECK_LIB([bz2], [BZ2_bzopen], [], [])
-    LIBS="-lavcodec -lavutil $LIBICONV $LIBINTL $LIBS"
-fi
-
 LDFLAGS_SAVE="$LDFLAGS"
 for dir in "" /usr/local $SEARCH_DIR; do
     if test -n "$dir"; then
@@ -416,10 +412,13 @@ for dir in "" /usr/local $SEARCH_DIR; do
     if test -n "$dir"; then
         LDFLAGS="$LDFLAGS -L$dir/lib"
     fi
-    AC_CHECK_LIB([id3tag], [id3_file_open], [LIBID3TAG_LIBS="-lid3tag"], [unset ac_cv_lib_id3tag_id3_file_open; LDFLAGS="$LDFLAGS_SAVE"; continue])
+    AC_CHECK_LIB([id3tag -lz], [id3_file_open], [LIBID3TAG_LIBS="-lid3tag -lz"], [unset ac_cv_lib_id3tag_id3_file_open; LDFLAGS="$LDFLAGS_SAVE"; continue])
     break
 done
-test x"$ac_cv_lib_id3tag_id3_file_open" = x"yes" || AC_MSG_ERROR([Could not find libid3tag])
+if test x"$ac_cv_lib_id3tag__lz___id3_file_open" != x"yes" &&
+   test x"$ac_cv_lib_id3tag__lz_id3_file_open" != x"yes"; then
+   AC_MSG_ERROR([Could not find libid3tag])
+fi
 AC_SUBST(LIBID3TAG_LIBS)
 
 LDFLAGS_SAVE="$LDFLAGS"
@@ -440,19 +439,17 @@ for dir in "" /usr/local $SEARCH_DIR; do
     if test -n "$dir"; then
         LDFLAGS="$LDFLAGS -L$dir/lib"
     fi
-    AC_CHECK_LIB([avformat], [av_open_input_file], [LIBAVFORMAT_LIBS="-lavformat"],
-		 [AC_CHECK_LIB([avformat], [avformat_open_input], [LIBAVFORMAT_LIBS="-lavformat"],
+    AC_CHECK_LIB([avformat -lavcodec -lavutil -lz], [avformat_open_input], [LIBAVFORMAT_LIBS="-lavformat -lavcodec -lavutil -lz"],
+		 [AC_CHECK_LIB([avformat -lavcodec -lavutil -lz], [av_open_input_file], [LIBAVFORMAT_LIBS="-lavformat -lavcodec -lavutil -lz"],
 		  [unset ac_cv_lib_avformat_av_open_input_file; unset ac_cv_lib_avformat_avformat_open_input; LDFLAGS="$LDFLAGS_SAVE"; continue])])
     break
 done
-if test x"$ac_cv_lib_avformat_av_open_input_file" != x"yes" &&
-   test x"$ac_cv_lib_avformat_avformat_open_input" != x"yes"; then
+if test x"$ac_cv_lib_avformat__lavcodec__lavutil__lz___av_open_input_file" != x"yes" &&
+   test x"$ac_cv_lib_avformat__lavcodec__lavutil__lz___avformat_open_input" != x"yes" &&
+   test x"$ac_cv_lib_avformat__lavcodec__lavutil__lz_avformat_open_input" != x"yes"; then
    AC_MSG_ERROR([Could not find libavformat - part of ffmpeg])
 fi
 AC_SUBST(LIBAVFORMAT_LIBS)
-
-AC_CHECK_LIB(avutil ,[av_rescale_q], [LIBAVUTIL_LIBS="-lavutil"], [AC_MSG_ERROR([Could not find libavutil - part of ffmpeg])])
-AC_SUBST(LIBAVUTIL_LIBS)
 
 AC_CHECK_LIB(pthread, pthread_create)
 
@@ -460,12 +457,11 @@ AC_CHECK_LIB(pthread, pthread_create)
 # prior versions had ov_open_callbacks in libvorbis, test that, too.
 AC_CHECK_LIB(vorbisfile, ov_open_callbacks,
         [AC_CHECK_HEADERS([vorbis/vorbisfile.h],
-          AM_CONDITIONAL(HAVE_VORBISFILE, true)
-          AC_DEFINE(HAVE_VORBISFILE,1,[Have vorbisfile]),
-          AM_CONDITIONAL(HAVE_VORBISFILE, false)
-          AC_DEFINE(HAVE_VORBISFILE,0,[lacking vorbisfile]))],
-          AM_CONDITIONAL(HAVE_VORBISFILE, false),
-          -lvorbis -logg)
+         AM_CONDITIONAL(HAVE_VORBISFILE, true)
+         AC_DEFINE(HAVE_VORBISFILE,1,[Have vorbisfile]),
+         AM_CONDITIONAL(HAVE_VORBISFILE, false))],
+         AM_CONDITIONAL(HAVE_VORBISFILE, false),
+         -lvorbis -logg)
 AC_CHECK_LIB(FLAC, FLAC__stream_decoder_init_stream,
         [AC_CHECK_HEADERS([FLAC/all.h],
          AM_CONDITIONAL(HAVE_FLAC, true)
@@ -484,12 +480,27 @@ AC_CHECK_LIB(vorbisfile, vorbis_comment_query,
         AM_CONDITIONAL(NEED_VORBIS, true),
         -logg)
 
+AC_CHECK_LIB(avahi-client, avahi_threaded_poll_new,
+        [AC_CHECK_HEADERS([avahi-common/thread-watch.h],
+         AM_CONDITIONAL(HAVE_AVAHI, true)
+         AC_DEFINE(HAVE_AVAHI,1,[Have avahi]),
+         AM_CONDITIONAL(HAVE_AVAHI, false))],
+         AM_CONDITIONAL(HAVE_AVAHI, false),
+        -lavahi-client -lavahi-common)
+
 ################################################################################################################
 ### Header checks
 
-AC_CHECK_HEADERS([arpa/inet.h asm/unistd.h endian.h machine/endian.h fcntl.h libintl.h locale.h netdb.h netinet/in.h stddef.h stdlib.h string.h sys/file.h sys/inotify.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([arpa/inet.h asm/unistd.h endian.h machine/endian.h fcntl.h libintl.h locale.h netdb.h netinet/in.h poll.h stddef.h stdlib.h string.h sys/file.h sys/inotify.h sys/ioctl.h sys/param.h sys/queue.h sys/socket.h sys/time.h unistd.h])
+test x"$ac_cv_header_poll_h" != x"yes" && AC_MSG_ERROR([poll.h not found or not usable])
+test x"$ac_cv_header_sys_queue_h" != x"yes" && AC_MSG_ERROR([sys/queue.h not found or not usable])
 
-AC_CHECK_FUNCS(inotify_init, AC_DEFINE(HAVE_INOTIFY,1,[Whether kernel has inotify support]), [
+AC_CHECK_FUNCS(inotify_init, 
+[
+    AC_DEFINE(HAVE_INOTIFY,1,[Whether kernel has inotify support])
+    AM_CONDITIONAL(HAVE_INOTIFY, true)
+],
+[
     AC_MSG_CHECKING([for __NR_inotify_init syscall])
     AC_COMPILE_IFELSE(
          [AC_LANG_PROGRAM(
@@ -505,11 +516,15 @@ AC_CHECK_FUNCS(inotify_init, AC_DEFINE(HAVE_INOTIFY,1,[Whether kernel has inotif
          [
              AC_MSG_RESULT([yes])
              AC_DEFINE(HAVE_INOTIFY,1,[Whether kernel has inotify support])
+             AM_CONDITIONAL(HAVE_INOTIFY, true)
          ],
          [
              AC_MSG_RESULT([no])
+             AM_CONDITIONAL(HAVE_INOTIFY, false)
          ])
 ])
+
+AC_CHECK_FUNCS(kqueue, AM_CONDITIONAL(HAVE_KQUEUE, true), AM_CONDITIONAL(HAVE_KQUEUE, false))
 
 ################################################################################################################
 ### Build Options
@@ -546,11 +561,14 @@ AC_ARG_ENABLE(tivo,
 	[  --enable-tivo           enable TiVo support],[
 	if test "$enableval" = "yes"; then
 		AC_DEFINE(TIVO_SUPPORT, 1, [Define to 1 if you want to enable TiVo support])
+		AM_CONDITIONAL(TIVO_SUPPORT, true)
 		AC_MSG_RESULT([yes])
 	else
+		AM_CONDITIONAL(TIVO_SUPPORT, false)
 		AC_MSG_RESULT([no])
 	fi
 	],[
+		AM_CONDITIONAL(TIVO_SUPPORT, false)
 		AC_MSG_RESULT([no])
 	]
 )
@@ -581,48 +599,12 @@ AC_ARG_ENABLE(readynas,
 		AC_DEFINE([NETGEAR],[1],[Define to 1 if you want to enable generic NETGEAR device support])
 		AC_DEFINE([READYNAS],[1],[Define to 1 if you want to enable NETGEAR ReadyNAS support])
 		AC_DEFINE([TIVO_SUPPORT], 1, [Define to 1 if you want to enable TiVo support])
-		AC_DEFINE([PNPX],[5],[Define to 5 if you want to enable NETGEAR ReadyNAS PnP-X support])
 		AC_DEFINE_UNQUOTED([OS_URL],"http://www.readynas.com/")
 		AC_DEFINE_UNQUOTED([ROOTDEV_MANUFACTURERURL],"http://www.netgear.com/")
 		AC_DEFINE_UNQUOTED([ROOTDEV_MANUFACTURER],"NETGEAR")
 		AC_DEFINE_UNQUOTED([ROOTDEV_MODELNAME],"Windows Media Connect compatible (ReadyDLNA)")
 		AC_DEFINE_UNQUOTED([ROOTDEV_MODELDESCRIPTION],"ReadyDLNA")
-                AC_MSG_RESULT([yes])
-        else
-                AC_MSG_RESULT([no])
-        fi
-        ],[
-                AC_MSG_RESULT([no])
-        ]
-)
-
-AC_MSG_CHECKING([whether to build a static binary executable])
-AC_ARG_ENABLE(static,
-	[  --enable-static         build a static binary executable],[
-	if test "$enableval" = "yes"; then
-		STATIC_CFLAGS="-DSTATIC"
-		AC_SUBST(STATIC_CFLAGS)
-		if test -z "$CYGWIN_OS"; then
-			STATIC_LDFLAGS="-Wl,-Bstatic"
-		else
-			STATIC_LDFLAGS="-Wl,-static -static-libgcc"
-		fi
-		AC_SUBST(STATIC_LDFLAGS)
-                AC_MSG_RESULT([yes])
-        else
-                AC_MSG_RESULT([no])
-        fi
-        ],[
-                AC_MSG_RESULT([no])
-        ]
-)
-
-if test -n "$CYGWIN_OS"; then
-AC_MSG_CHECKING([whether to enable Windows profile support])
-AC_ARG_ENABLE(win-profile,
-	[  --enable-win-profile    enable Windows profile support],[
-	if test "$enableval" = "yes"; then
-		AC_DEFINE(WIN_PROFILE_SUPPORT, 1, [Define to 1 if you want to enable Windows profile support])
+		AM_CONDITIONAL(TIVO_SUPPORT, true)
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
@@ -631,7 +613,36 @@ AC_ARG_ENABLE(win-profile,
 		AC_MSG_RESULT([no])
 	]
 )
-fi
+
+AC_MSG_CHECKING([whether to build a static binary executable])
+AC_ARG_ENABLE(static,
+	[  --enable-static         build a static binary executable],[
+	if test "$enableval" = "yes"; then
+		CFLAGS="$CFLAGS -DSTATIC"
+		LDFLAGS="$LDFLAGS -static"
+                AC_MSG_RESULT([yes])
+        else
+                AC_MSG_RESULT([no])
+        fi
+        ],[
+                AC_MSG_RESULT([no])
+        ]
+)
+
+AC_MSG_CHECKING([whether to enable LTO])
+AC_ARG_ENABLE(lto,
+	[  --enable-lto            enable link-time optimization],[
+	if test "$enableval" = "yes"; then
+		CFLAGS="$CFLAGS -flto"
+                AC_MSG_RESULT([yes])
+        else
+                AC_MSG_RESULT([no])
+        fi
+        ],[
+                AC_MSG_RESULT([no])
+        ]
+)
+
 
 case "$target_os" in
 	darwin*)
@@ -652,15 +663,6 @@ case "$target_os" in
 		;;
         openbsd*)
                 OS_URL=http://www.openbsd.org/
-                ;;
-        cygwin*)
-                OS_URL=http://www.cygwin.com/
-                AC_DEFINE(HAVE_INOTIFY, [1], [support inotify equivalent function on Cygwin])
-                if test "$target_cpu" != "x86_64"; then
-                        LIBS="$LIBS -lws2_32 -liphlpapi"
-                else
-                        LIBS="$LIBS -liphlpapi"
-                fi
                 ;;
         *)
                 echo "Unknown OS : $target_os"

@@ -1,3 +1,65 @@
+1.3.1 - Released 11-Feb-2022
+--------------------------------
+- Fixed a potential crash in SSDP request parsing.
+- Fixed a configure script failure on some platforms.
+- Protect against DNS rebinding attacks.
+- Fix an socket leakage issue on some platforms.
+- Minor bug fixes.
+
+1.3.0 - Released 24-Nov-2020
+--------------------------------
+- Fixed some build warnings when building with musl.
+- Use $USER instead of $LOGNAME for the default friendly name.
+- Fixed build with GCC 10
+- Fixed some warnings from newer compilers
+- Disallow negative HTTP chunk lengths. [CVE-2020-28926]
+- Validate SUBSCRIBE callback URL. [CVE-2020-12695]
+- Fixed spurious warnings with ogg coverart
+- Fixed an issue with VLC where browse results would be truncated.
+- Fixed bookmarks on Samsung Q series
+- Added DSD file support.
+- Fixed potential stack smash vulnerability in getsyshwaddr on macOS.
+- Will now reload the log file on SIGHUP.
+- Worked around bad SearchCriteria from the Control4 Android app.
+- Increased max supported network addresses to 8.
+- Added forced alphasort capability.
+- Added episode season and number metadata support.
+- Enabled subtitles by default for unknown DLNA clients, and add enable_subtitles config option.
+- Fixed discovery when connected to certain WiFi routers.
+- Added FreeBSD kqueue support.
+- Added the ability to set the group to run as.
+
+1.2.1 - Released 24-Aug-2017
+--------------------------------
+- Added Movian client detection and subtitle support.
+- Fixed an issue with discovery on non-Linux systems.
+- Fixed Bonjour discovery compatibility with TiVo Bolt.
+- Fixed NFO file parsing, and added change monitoring support for them.
+- Added a workaround for video thumbnails on some Samsung clients.
+- Added DoS protection for event subscriptions.
+- Fixed content browsing issues with some Samsung TVs.
+- Improved non-destructive update scan support.
+
+1.2.0 - Released 17-May-2017
+--------------------------------
+- Add libavformat > 57 compatibility.
+- Add TiVo Bonjour discovery support using Avahi for Bolt.
+- Improve Samsung BD-J5500 support.
+- Add quirk to fix video playback on Hyundai TVs.
+- Add non-destructive update rescan support.
+- Enhance bookmark support to work with Kodi.
+
+1.1.6 - Released 16-June-2016
+--------------------------------
+- Add AllShare and Windows client detection.
+- Update support for LG2012 TV.
+- Fix Samsung bookmarking on magic containers.
+- Fix SQL error when moving captions.
+- Add wide_links config option.
+- Fix external subtitles on Samsung Series J.
+- Add string localization support for magic containers.
+- Rework NLS init to work with non-en_US locales.
+
 1.1.5 - Released 10-Sep-2015
 --------------------------------
 - Re-enable Samsung DCM10, which adds video bookmarks and "BasicView" support.

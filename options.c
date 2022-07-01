@@ -66,9 +66,8 @@ static const struct {
 	{ MAX_CONNECTIONS, "max_connections" },
 	{ MERGE_MEDIA_DIRS, "merge_media_dirs" },
 	{ WIDE_LINKS, "wide_links" },
-	{ RESIZE_COVER_ART, "resize_covers" },
-	{ PREPEND_TRACK_NUMBER, "prepend_track_no" },
-	{ PREPEND_DISC_NUMBER, "prepend_disc_no" }
+	{ TIVO_DISCOVERY, "tivo_discovery" },
+	{ ENABLE_SUBTITLES, "enable_subtitles" },
 };
 
 int
@@ -99,7 +98,7 @@ readoptionsfile(const char * fname)
 	while(fgets(buffer, sizeof(buffer), hfile))
 	{
 		linenum++;
-		t = strchr(buffer, '\n');
+		t = strchr(buffer, '\n'); 
 		if(t)
 		{
 			*t = '\0';
@@ -177,9 +176,9 @@ readoptionsfile(const char * fname)
 		}
 
 	}
-
+	
 	fclose(hfile);
-
+	
 	return 0;
 }
 
@@ -188,7 +187,7 @@ freeoptions(void)
 {
 	struct media_dir_s *media_path, *last_path;
 	struct album_art_name_s *art_names, *last_name;
-
+	
 	media_path = media_dirs;
 	while (media_path)
 	{
@@ -214,3 +213,4 @@ freeoptions(void)
 		num_options = 0;
 	}
 }
+
